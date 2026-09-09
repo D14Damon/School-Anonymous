@@ -27,6 +27,7 @@ export const CreatePostModal: React.FC = () => {
   const {
     currentUser,
     approvedSchools,
+    activeSchoolFilter,
     isCreatePostModalOpen,
     setIsCreatePostModalOpen,
     createPost,
@@ -42,7 +43,7 @@ export const CreatePostModal: React.FC = () => {
   const isCreator = isCreatorEmail(currentUser?.email);
   const hasApprovedSchool = approvedSchools.length > 0 &&
     Boolean(currentUser?.schoolId && currentUser.schoolId !== 'unassigned' && approvedSchools.some((s) => s.id === currentUser.schoolId));
-  const canPost = approvedSchools.length > 0 && (isCreator || hasApprovedSchool);
+  const canPost = approvedSchools.length > 0 && (isCreator || (hasApprovedSchool && (activeSchoolFilter === 'all' || activeSchoolFilter === currentUser?.schoolId)));
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 

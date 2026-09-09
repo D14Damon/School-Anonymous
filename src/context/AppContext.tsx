@@ -86,6 +86,7 @@ interface AppContextType {
     isAnonymous: boolean;
   }) => Promise<{ success: boolean; error?: string }>;
   reactToPost: (postId: string, reactionType: keyof PostReactions) => Promise<void>;
+  boostPostReaction: (postId: string, reactionType: keyof PostReactions, amount?: number) => Promise<{ success: boolean; error?: string }>;
   addComment: (postId: string, text: string, isAnonymous: boolean) => Promise<{ success: boolean; error?: string }>;
   deletePost: (postId: string) => Promise<{ success: boolean; error?: string }>;
   
@@ -114,6 +115,33 @@ try {
 } catch {
   // ignore
 }
+
+const normalizeReactionType = (reactionType: string): keyof PostReactions => {
+  const legacyMap: Record<string, keyof PostReactions> = {
+    blood: 'angry',
+    candle: 'like',
+    skull: 'sad',
+    rose: 'love',
+  };
+  return legacyMap[reactionType] || (reactionType as keyof PostReactions);
+};
+
+const normalizeReactions = (reactions: Partial<Record<string, number>> = {}): PostReactions => ({
+  like: Number(reactions.like || 0) + Number(reactions.candle || 0),
+  love: Number(reactions.love || 0) + Number(reactions.rose || 0),
+  haha: Number(reactions.haha || 0),
+  sad: Number(reactions.sad || 0) + Number(reactions.skull || 0),
+  angry: Number(reactions.angry || 0) + Number(reactions.blood || 0),
+});
+
+const normalizePost = (id: string, data: Omit<Post, 'id'>): Post => ({
+  ...data,
+  id,
+  reactions: normalizeReactions(data.reactions as unknown as Partial<Record<string, number>>),
+  userReactions: Object.fromEntries(
+    Object.entries(data.userReactions || {}).map(([userId, reaction]) => [userId, normalizeReactionType(reaction)])
+  ),
+});
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -279,11 +307,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const loaded: Post[] = [];
         snapshot.forEach((docSnap) => {
-          loaded.push({ id: docSnap.id, ...(docSnap.data() as Omit<Post, 'id'>) });
+          loaded.push(normalizePost(docSnap.id, docSnap.data() as Omit<Post, 'id'>));
         });
         // Guarantee most recent post is at the top
         loaded.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setPosts(loaded);
+        setSelectedPost((selected) => selected ? loaded.find((post) => post.id === selected.id) || null : null);
       }, (err) => {
         console.warn('Firestore posts listener note:', err.message);
       });
@@ -294,6 +323,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const [schoolMemberCounts, setSchoolMemberCounts] = useState<Record<string, number>>({});
+  const [hasLoadedSchoolMemberCounts, setHasLoadedSchoolMemberCounts] = useState(false);
 
   // 4. Real-time School Member Counts listener from users collection
   useEffect(() => {
@@ -309,6 +339,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         });
         setSchoolMemberCounts(counts);
+        setHasLoadedSchoolMemberCounts(true);
       }, (err) => {
         console.warn('Firestore users member listener note:', err.message);
       });
@@ -323,7 +354,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const realtime = schoolMemberCounts[schoolId] || 0;
     const sch = schools.find((s) => s.id === schoolId);
     const staticCount = sch?.studentCount || 0;
-    return Math.max(realtime, staticCount, 0);
+    return hasLoadedSchoolMemberCounts ? realtime : Math.max(staticCount, 0);
   };
 
   const pendingSchoolCount = schools.filter((s) => s.status === 'pending').length;
@@ -680,8 +711,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     try {
       await updateDoc(doc(db, 'users', currentUser.id), sanitizedUpdates);
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Could not update user in firestore:', err);
+      setCurrentUser(currentUser);
+      return { success: false, error: err.message || 'Could not save profile changes. Please try again.' };
     }
 
     // Sync author details in posts state
@@ -778,7 +811,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let targetSchoolId = currentUser.schoolId || 'unassigned';
     let targetSchoolName = currentUser.schoolName || 'Independent Scholar';
 
-    if (activeSchoolFilter && activeSchoolFilter !== 'all') {
+    if (isCreatorEmail(currentUser.email) && activeSchoolFilter && activeSchoolFilter !== 'all') {
       const activeSch = approvedSchools.find((s) => s.id === activeSchoolFilter);
       if (activeSch) {
         targetSchoolId = activeSch.id;
@@ -809,8 +842,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       caption: cleanCaption || '',
       tag,
       createdAt: new Date().toISOString(),
-      reactions: { blood: 1, candle: 1, skull: 0, rose: 0 },
-      userReactions: { [currentUser.id]: 'candle' as keyof PostReactions },
+      reactions: { like: 0, love: 0, haha: 0, sad: 0, angry: 0 },
+      userReactions: {},
       comments: [],
     };
 
@@ -832,9 +865,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: true };
     } catch (err: any) {
       console.error('Failed to create post in Firestore:', err);
-      const localPost: Post = { id: `post-${Date.now()}`, ...newPostData };
-      setPosts((prev) => [localPost, ...prev]);
-      return { success: true };
+      return { success: false, error: err.message || 'Could not publish post. Please try again.' };
     }
   };
 
@@ -879,12 +910,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: true };
     } catch (err: any) {
       console.error('Error deleting post from Firestore:', err);
-      // Optimistically remove locally as fallback
-      setPosts((prev) => prev.filter((p) => p.id !== postId));
-      if (selectedPost?.id === postId) {
-        setSelectedPost(null);
-      }
-      return { success: true };
+      return { success: false, error: err.message || 'Could not delete post. Please try again.' };
     }
   };
 
@@ -925,8 +951,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         reactions: newReactions,
         userReactions: newUserReactions,
       });
-    } catch {
-      // fallback local
+    } catch (err: any) {
+      setPosts((prev) => prev.map((candidate) => (candidate.id === postId ? post : candidate)));
+      if (selectedPost?.id === postId) setSelectedPost(post);
+      console.warn('Could not save reaction:', err);
+    }
+  };
+
+  const boostPostReaction = async (
+    postId: string,
+    reactionType: keyof PostReactions,
+    amount = 1
+  ): Promise<{ success: boolean; error?: string }> => {
+    const isCreator = currentUser?.role === 'creator' || isCreatorEmail(currentUser?.email);
+    if (!isCreator) return { success: false, error: 'Only the Website Creator can boost reactions.' };
+
+    const post = posts.find((candidate) => candidate.id === postId);
+    if (!post) return { success: false, error: 'Post not found.' };
+
+    if (!Number.isFinite(amount) || amount < 1 || amount > 5000) {
+      return { success: false, error: 'Boost amount must be between 1 and 5000.' };
+    }
+
+    const safeAmount = Math.floor(amount);
+
+    const newReactions = {
+      ...normalizeReactions(post.reactions as unknown as Partial<Record<string, number>>),
+      [reactionType]: (post.reactions[reactionType] || 0) + safeAmount,
+    };
+    const updatedPost = { ...post, reactions: newReactions };
+    setPosts((prev) => prev.map((candidate) => (candidate.id === postId ? updatedPost : candidate)));
+    if (selectedPost?.id === postId) setSelectedPost(updatedPost);
+
+    try {
+      await updateDoc(doc(db, 'posts', postId), { reactions: newReactions });
+      return { success: true };
+    } catch (err: any) {
+      setPosts((prev) => prev.map((candidate) => (candidate.id === postId ? post : candidate)));
+      if (selectedPost?.id === postId) setSelectedPost(post);
+      return { success: false, error: err.message || 'Could not boost reaction.' };
     }
   };
 
@@ -970,8 +1033,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await updateDoc(doc(db, 'posts', postId), {
         comments: updatedComments,
       });
-    } catch {
-      // fallback
+    } catch (err: any) {
+      setPosts((prev) => prev.map((candidate) => (candidate.id === postId ? post : candidate)));
+      if (selectedPost?.id === postId) setSelectedPost(post);
+      console.warn('Could not save comment:', err);
+      return { success: false, error: err.message || 'Could not save comment. Please try again.' };
     }
 
     return { success: true };
@@ -1083,6 +1149,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleAnonymity,
         createPost,
         reactToPost,
+        boostPostReaction,
         addComment,
         deletePost,
         approveSchool,

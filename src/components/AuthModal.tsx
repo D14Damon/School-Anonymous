@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { processImageToBase64_500x500 } from '../utils/imageUtils';
 import { 
@@ -43,6 +43,12 @@ export const AuthModal: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (schoolChoice !== 'new' && !approvedSchools.some((school) => school.id === schoolChoice)) {
+      setSchoolChoice(approvedSchools[0]?.id || 'new');
+    }
+  }, [approvedSchools, schoolChoice]);
 
   if (!isAuthModalOpen) return null;
 

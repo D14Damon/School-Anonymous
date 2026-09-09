@@ -158,14 +158,10 @@ export const SchoolOnboardingScreen: React.FC = () => {
               </div>
 
               <button
-                onClick={() => {
-                  // User already has schoolId updated in handleRegisterNewSchool
-                  // Refresh or trigger next render
-                  window.location.reload();
-                }}
+                onClick={() => setSubmittedSchoolName(null)}
                 className="px-6 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white font-gothic text-xs font-bold uppercase tracking-wider transition-all inline-flex items-center gap-2"
               >
-                <span>Enter School Anonymous</span>
+                <span>Choose Another School</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>

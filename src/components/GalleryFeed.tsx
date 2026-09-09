@@ -43,8 +43,6 @@ export const GalleryFeed: React.FC = () => {
   const isCreator = isCreatorEmail(currentUser?.email);
   const hasApprovedSchool = approvedSchools.length > 0 && 
     Boolean(currentUser?.schoolId && currentUser.schoolId !== 'unassigned' && approvedSchools.some((s) => s.id === currentUser.schoolId));
-  const canPost = approvedSchools.length > 0 && (isCreator || hasApprovedSchool);
-
   // Target school: either current filter, or user's registered school, or first available approved school
   const currentSchoolId = (activeSchoolFilter !== 'all' && activeSchoolFilter && approvedSchools.some((s) => s.id === activeSchoolFilter))
     ? activeSchoolFilter
@@ -53,6 +51,7 @@ export const GalleryFeed: React.FC = () => {
     : (approvedSchools[0]?.id || '');
 
   const activeSchoolObj = approvedSchools.find((s) => s.id === currentSchoolId) || approvedSchools[0];
+  const canPost = approvedSchools.length > 0 && (isCreator || (hasApprovedSchool && currentSchoolId === currentUser?.schoolId));
 
   // Filter posts strictly by this school, tag, and search query
   const filteredPosts = posts.filter((post) => {

@@ -186,63 +186,72 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
           </p>
         ) : null}
 
-        {/* Gothic Reactions Bar (Blood, Candle, Skull, Rose) */}
+        {/* Facebook-style reaction bar */}
         <div className="pt-3 border-t border-[#1a1d2a] flex items-center justify-between">
           <div className="flex items-center gap-1 sm:gap-1.5">
-            {/* Blood reaction */}
             <button
-              onClick={() => reactToPost(post.id, 'blood')}
+              onClick={() => reactToPost(post.id, 'like')}
               className={`px-2 py-1 rounded-lg text-xs flex items-center gap-1 transition-all ${
-                userReaction === 'blood'
-                  ? 'bg-red-950 text-red-300 border border-red-700 shadow-[0_0_8px_rgba(220,38,38,0.4)]'
+                userReaction === 'like'
+                  ? 'bg-blue-950 text-blue-300 border border-blue-700 shadow-[0_0_8px_rgba(59,130,246,0.4)]'
                   : 'bg-[#151722] hover:bg-[#1f2334] text-slate-400'
               }`}
-              title="Vow of Blood"
+              title="Like"
             >
-              <span>🩸</span>
-              <span className="font-mono text-[11px]">{post.reactions.blood}</span>
+              <span>👍</span>
+              <span className="font-mono text-[11px]">{post.reactions.like}</span>
             </button>
 
-            {/* Candle reaction */}
             <button
-              onClick={() => reactToPost(post.id, 'candle')}
+              onClick={() => reactToPost(post.id, 'love')}
               className={`px-2 py-1 rounded-lg text-xs flex items-center gap-1 transition-all ${
-                userReaction === 'candle'
-                  ? 'bg-amber-950 text-amber-300 border border-amber-700 shadow-[0_0_8px_rgba(245,158,11,0.4)]'
+                userReaction === 'love'
+                  ? 'bg-rose-950 text-rose-300 border border-rose-700 shadow-[0_0_8px_rgba(244,63,94,0.4)]'
                   : 'bg-[#151722] hover:bg-[#1f2334] text-slate-400'
               }`}
-              title="Light Tallow Candle"
+              title="Love"
             >
-              <span>🕯️</span>
-              <span className="font-mono text-[11px]">{post.reactions.candle}</span>
+              <span>❤️</span>
+              <span className="font-mono text-[11px]">{post.reactions.love}</span>
             </button>
 
-            {/* Skull reaction */}
             <button
-              onClick={() => reactToPost(post.id, 'skull')}
+              onClick={() => reactToPost(post.id, 'haha')}
               className={`px-2 py-1 rounded-lg text-xs flex items-center gap-1 transition-all ${
-                userReaction === 'skull'
-                  ? 'bg-slate-800 text-slate-100 border border-slate-600'
+                userReaction === 'haha'
+                  ? 'bg-yellow-950 text-yellow-300 border border-yellow-700'
                   : 'bg-[#151722] hover:bg-[#1f2334] text-slate-400'
               }`}
-              title="Relic Skull"
+              title="Haha"
             >
-              <span>💀</span>
-              <span className="font-mono text-[11px]">{post.reactions.skull}</span>
+              <span>😂</span>
+              <span className="font-mono text-[11px]">{post.reactions.haha}</span>
             </button>
 
-            {/* Rose reaction */}
             <button
-              onClick={() => reactToPost(post.id, 'rose')}
+              onClick={() => reactToPost(post.id, 'sad')}
               className={`px-2 py-1 rounded-lg text-xs flex items-center gap-1 transition-all ${
-                userReaction === 'rose'
-                  ? 'bg-rose-950 text-rose-300 border border-rose-700'
+                userReaction === 'sad'
+                  ? 'bg-cyan-950 text-cyan-300 border border-cyan-700'
                   : 'bg-[#151722] hover:bg-[#1f2334] text-slate-400'
               }`}
-              title="Nocturne Rose"
+              title="Sad"
             >
-              <span>🥀</span>
-              <span className="font-mono text-[11px]">{post.reactions.rose}</span>
+              <span>😢</span>
+              <span className="font-mono text-[11px]">{post.reactions.sad}</span>
+            </button>
+
+            <button
+              onClick={() => reactToPost(post.id, 'angry')}
+              className={`px-2 py-1 rounded-lg text-xs flex items-center gap-1 transition-all ${
+                userReaction === 'angry'
+                  ? 'bg-orange-950 text-orange-300 border border-orange-700'
+                  : 'bg-[#151722] hover:bg-[#1f2334] text-slate-400'
+              }`}
+              title="Angry"
+            >
+              <span>😡</span>
+              <span className="font-mono text-[11px]">{post.reactions.angry}</span>
             </button>
           </div>
 

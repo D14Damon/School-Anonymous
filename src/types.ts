@@ -46,10 +46,11 @@ export interface Comment {
 }
 
 export interface PostReactions {
-  blood: number;
-  candle: number;
-  skull: number;
-  rose: number;
+  like: number;
+  love: number;
+  haha: number;
+  sad: number;
+  angry: number;
 }
 
 export interface Post {

@@ -41,7 +41,7 @@ export const Header: React.FC = () => {
   const isCreator = isCreatorEmail(currentUser?.email);
   const hasApprovedSchool = approvedSchools.length > 0 && 
     Boolean(currentUser?.schoolId && currentUser.schoolId !== 'unassigned' && approvedSchools.some((s) => s.id === currentUser.schoolId));
-  const canPost = approvedSchools.length > 0 && (isCreator || hasApprovedSchool);
+  const canPost = approvedSchools.length > 0 && (isCreator || (hasApprovedSchool && (activeSchoolFilter === 'all' || activeSchoolFilter === currentUser?.schoolId)));
 
   const selectedSchool = approvedSchools.find((s) => s.id === activeSchoolFilter) || 
     approvedSchools.find((s) => s.id === currentUser?.schoolId) ||
