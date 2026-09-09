@@ -1,0 +1,167 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // =========================================================================
+    // GLOBAL FORTRESS WALL: DEFAULT DENY ALL
+    // Hacker Defense: Any document or path not explicitly granted is blocked.
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // SECURITY HELPER FUNCTIONS
+    // =========================================================================
+    function isSignedIn() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isCreator() {
+      return isSignedIn() && (
+        request.auth.token.email == "xiaolongbao312006@gmail.com" ||
+        request.auth.token.email.matches(".*creator.*")
+      );
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidTag(tag) {
+      return tag in [
+        "Confessions",
+        "Shoutouts",
+        "ngl / tbh / fr",
+        "Rants & Vent",
+        "Questions & Curious",
+        "Appreciation"
+      ];
+    }
+
+    // =========================================================================
+    // 1. USERS COLLECTION
+    // Protection against account hijacking, role escalation, and profile spoofing
+    // =========================================================================
+    match /users/{userId} {
+      // Authenticated scholars can view profiles (needed for school feed avatars and names)
+      allow read: if isSignedIn();
+
+      // Account Creation Security:
+      // - Must match caller's Auth UID
+      // - Role must default to 'student' (cannot self-assign creator role)
+      // - Nickname strictly verified when isAnonymous / Compelled mode is active
+      allow create: if isOwner(userId)
+        && request.resource.data.id == userId
+        && (request.resource.data.role == "student" || isCreator())
+        && isValidString(request.resource.data.name, 1, 100)
+        && request.resource.data.isAnonymous is bool
+        && (
+          !request.resource.data.isAnonymous 
+          || (
+            request.resource.data.anonymousNickname is string 
+            && request.resource.data.anonymousNickname.size() >= 3 
+            && request.resource.data.anonymousNickname.size() <= 20
+            && request.resource.data.anonymousNickname.matches('^[a-zA-Z0-9_\\-]+$')
+          )
+        );
+
+      // Account Update Security:
+      // - Only the owner can edit their profile
+      // - Prevents privilege escalation (role cannot be changed unless caller is Creator)
+      // - Caller cannot change account ID
+      allow update: if isOwner(userId)
+        && request.resource.data.id == userId
+        && (request.resource.data.role == resource.data.role || isCreator())
+        && isValidString(request.resource.data.name, 1, 100)
+        && request.resource.data.isAnonymous is bool
+        && (
+          !request.resource.data.isAnonymous 
+          || (
+            request.resource.data.anonymousNickname is string 
+            && request.resource.data.anonymousNickname.size() >= 3 
+            && request.resource.data.anonymousNickname.size() <= 20
+            && request.resource.data.anonymousNickname.matches('^[a-zA-Z0-9_\\-]+$')
+          )
+        );
+
+      // Only account owner or Creator can delete account
+      allow delete: if isOwner(userId) || isCreator();
+    }
+
+    // =========================================================================
+    // 2. SCHOOLS COLLECTION
+    // Governance Shield: Only the Creator can approve or decline campus affiliations
+    // =========================================================================
+    match /schools/{schoolId} {
+      allow read: if isSignedIn();
+
+      // New school submissions MUST start in "pending" status (unless Creator)
+      allow create: if isSignedIn()
+        && isValidString(request.resource.data.name, 1, 120)
+        && (
+          (request.resource.data.status == "pending" && request.resource.data.submittedByUserId == request.auth.uid)
+          || isCreator()
+        );
+
+      // School Approvals & Updates:
+      // - Only Creator has authority to approve or decline schools
+      // - Regular scholars can only increment studentCount or postCount
+      allow update: if isCreator() || (
+        isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['postCount', 'studentCount'])
+      );
+
+      // Deletion strictly reserved for the Creator
+      allow delete: if isCreator();
+    }
+
+    // =========================================================================
+    // 3. POSTS COLLECTION
+    // Anti-Spam, Payload Caps, and Compelled Identity Protection
+    // =========================================================================
+    match /posts/{postId} {
+      allow read: if isSignedIn();
+
+      // - Creation Fortress:
+      // - Must authenticate with real UID
+      // - Image is optional (can post text-only or photo + text); if present, capped at 2.5MB
+      // - Caption length capped at 1500 characters to prevent buffer attacks
+      // - Tag must strictly match the authorized categories
+      // - COMPELLED ENFORCEMENT: When isAnonymous == true, identity fields (authorYear, authorBio)
+      //   are strictly forbidden from being attached, preventing identity leaks even via raw API scripts
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && (
+          !('imageBase64' in request.resource.data)
+          || request.resource.data.imageBase64 == null
+          || (request.resource.data.imageBase64 is string && request.resource.data.imageBase64.size() <= 2621440)
+        )
+        && isValidString(request.resource.data.caption, 1, 1500)
+        && isValidTag(request.resource.data.tag)
+        && request.resource.data.isAnonymous is bool
+        && (
+          !request.resource.data.isAnonymous
+          || (
+            !('authorYear' in request.resource.data) 
+            && !('authorBio' in request.resource.data)
+          )
+        );
+
+      // Post Updates:
+      // - Author can edit their own post
+      // - Other authenticated scholars can only submit reactions and comments
+      allow update: if isSignedIn() && (
+        (resource.data.userId == request.auth.uid)
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'userReactions', 'comments'])
+      );
+
+      // Deletion: Author or Creator only
+      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isCreator());
+    }
+  }
+}

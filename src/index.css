@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-gothic: 'Cinzel', serif;
+    --font-ornate: 'Cinzel Decorative', serif;
+    --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  body {
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: #090a0d;
+    color: #e2e8f0;
+  }
+}
+
+.font-gothic {
+  font-family: 'Cinzel', Georgia, serif;
+}
+
+.font-ornate {
+  font-family: 'Cinzel Decorative', Georgia, serif;
+}
+
+.font-modern {
+  font-family: 'Outfit', sans-serif;
+}
+
+/* Dark Gothic Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #090a0d;
+}
+::-webkit-scrollbar-thumb {
+  background: #272a38;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #471d24;
+}

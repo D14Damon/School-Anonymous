@@ -1,0 +1,6 @@
+{
+  "name": "School Anonymous",
+  "description": "Gothic-themed school network where students share visual posts under verified or veiled anonymous profiles, with creator school approval governance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

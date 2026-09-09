@@ -1,0 +1,75 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with 500x500 base64 portrait and school affiliation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 200 },
+        "avatarBase64": { "type": "string", "maxLength": 2621440 },
+        "isAnonymous": { "type": "boolean" },
+        "schoolId": { "type": "string", "maxLength": 128 },
+        "schoolName": { "type": "string", "maxLength": 200 },
+        "role": { "type": "string", "enum": ["creator", "student"] },
+        "bio": { "type": "string", "maxLength": 1000 },
+        "year": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "email", "avatarBase64", "isAnonymous", "schoolId", "role", "createdAt"]
+    },
+    "School": {
+      "title": "School",
+      "description": "Educational institution registered and approved by website creator",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 200 },
+        "city": { "type": "string", "maxLength": 100 },
+        "country": { "type": "string", "maxLength": 100 },
+        "status": { "type": "string", "enum": ["approved", "pending", "declined"] },
+        "submittedByUserId": { "type": "string", "maxLength": 128 },
+        "submittedByUserName": { "type": "string", "maxLength": 100 },
+        "submittedAt": { "type": "string", "format": "date-time" },
+        "moderationNote": { "type": "string", "maxLength": 500 },
+        "studentCount": { "type": "number" },
+        "postCount": { "type": "number" }
+      },
+      "required": ["name", "status", "submittedByUserId", "submittedByUserName", "submittedAt"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "Student gallery post with 500x500 base64 image and reactions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 100 },
+        "authorAvatarBase64": { "type": "string", "maxLength": 2621440 },
+        "isAnonymous": { "type": "boolean" },
+        "schoolId": { "type": "string", "maxLength": 128 },
+        "schoolName": { "type": "string", "maxLength": 200 },
+        "imageBase64": { "type": "string", "maxLength": 2621440 },
+        "caption": { "type": "string", "maxLength": 1500 },
+        "tag": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "authorName", "imageBase64", "caption", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profile records"
+    },
+    "/schools/{schoolId}": {
+      "schema": { "$ref": "#/entities/School" },
+      "description": "School directory records reviewed by creator"
+    },
+    "/posts/{postId}": {
+      "schema": { "$ref": "#/entities/Post" },
+      "description": "Gallery feed posts"
+    }
+  }
+}
