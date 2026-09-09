@@ -1,13 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Post } from '../types';
 import { useApp } from '../context/AppContext';
 import { formatPhilippineDateTime } from '../utils/dateUtils';
+import { isCreatorEmail } from '../utils/security';
 import { 
   MessageSquare, 
   EyeOff, 
   School as SchoolIcon, 
   Maximize2,
-  Clock
+  Clock,
+  Trash2,
+  ShieldAlert
 } from 'lucide-react';
 
 interface PostCardProps {
@@ -15,7 +18,27 @@ interface PostCardProps {
 }
 
 export const PostCard: React.FC<PostCardProps> = ({ post }) => {
-  const { reactToPost, setSelectedPost, currentUser } = useApp();
+  const { reactToPost, setSelectedPost, currentUser, deletePost } = useApp();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const isCreator = currentUser?.role === 'creator' || isCreatorEmail(currentUser?.email);
+  const isAuthor = currentUser?.id === post.userId;
+  const canDelete = isCreator || isAuthor;
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      setTimeout(() => setConfirmDelete(false), 4000);
+      return;
+    }
+
+    setIsDeleting(true);
+    await deletePost(post.id);
+    setIsDeleting(false);
+    setConfirmDelete(false);
+  };
 
   const userReaction = currentUser ? post.userReactions[currentUser.id] : undefined;
   const pht = formatPhilippineDateTime(post.createdAt);
@@ -65,15 +88,39 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
           </div>
         </div>
 
-        {/* Philippine Standard Time & Date */}
-        <div className="text-right shrink-0" title={pht.full}>
-          <div className="text-[10px] font-mono text-slate-300 font-semibold flex items-center justify-end gap-1">
-            <Clock className="w-2.5 h-2.5 text-red-400" />
-            <span>{pht.time}</span>
+        {/* Right Side: Philippine Standard Time & Delete Action */}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="text-right" title={pht.full}>
+            <div className="text-[10px] font-mono text-slate-300 font-semibold flex items-center justify-end gap-1">
+              <Clock className="w-2.5 h-2.5 text-red-400" />
+              <span>{pht.time}</span>
+            </div>
+            <div className="text-[9px] font-mono text-slate-500">
+              {pht.date}
+            </div>
           </div>
-          <div className="text-[9px] font-mono text-slate-500">
-            {pht.date}
-          </div>
+
+          {/* Delete Button (Website Creator or Post Author) */}
+          {canDelete && (
+            <button
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className={`p-1.5 rounded-lg transition-all border flex items-center gap-1 ${
+                confirmDelete
+                  ? 'bg-red-600 text-white border-red-400 text-[10px] font-mono px-2 animate-pulse'
+                  : isCreator
+                  ? 'bg-red-950/60 text-red-400 hover:text-red-200 hover:bg-red-900 border-red-800/60'
+                  : 'bg-[#181a26] text-slate-400 hover:text-red-400 hover:bg-red-950/40 border-[#262c3e]'
+              }`}
+              title={isCreator ? "Delete Post (Website Creator Authority)" : "Delete Post"}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {confirmDelete && <span>Delete?</span>}
+              {!confirmDelete && isCreator && (
+                <ShieldAlert className="w-2.5 h-2.5 text-amber-400" />
+              )}
+            </button>
+          )}
         </div>
       </div>
 

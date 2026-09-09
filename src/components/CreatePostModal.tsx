@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+import { isCreatorEmail } from '../utils/security';
 import { processImageToBase64_500x500 } from '../utils/imageUtils';
 import { PostTag } from '../types';
 import { 
@@ -25,6 +26,7 @@ const TAGS: PostTag[] = [
 export const CreatePostModal: React.FC = () => {
   const {
     currentUser,
+    approvedSchools,
     isCreatePostModalOpen,
     setIsCreatePostModalOpen,
     createPost,
@@ -36,6 +38,11 @@ export const CreatePostModal: React.FC = () => {
   const [isAnonymous, setIsAnonymous] = useState<boolean>(currentUser?.isAnonymous || false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
+
+  const isCreator = isCreatorEmail(currentUser?.email);
+  const hasApprovedSchool = approvedSchools.length > 0 &&
+    Boolean(currentUser?.schoolId && currentUser.schoolId !== 'unassigned' && approvedSchools.some((s) => s.id === currentUser.schoolId));
+  const canPost = approvedSchools.length > 0 && (isCreator || hasApprovedSchool);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -62,6 +69,11 @@ export const CreatePostModal: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canPost) {
+      setErrorMsg('You cannot publish a post without belonging to an approved school.');
+      return;
+    }
+
     if (!caption.trim() && !imageBase64) {
       setErrorMsg('Please write some text or upload a picture.');
       return;
@@ -279,14 +291,25 @@ export const CreatePostModal: React.FC = () => {
           {/* School Affiliation */}
           <div className="text-[11px] text-slate-400 flex items-center gap-1.5 px-1">
             <SchoolIcon className="w-3.5 h-3.5 text-red-500" />
-            <span>School: <strong>{currentUser.schoolName}</strong></span>
+            <span>School: <strong>{currentUser.schoolName || 'Unassigned'}</strong></span>
           </div>
+
+          {!canPost && (
+            <div className="p-3 rounded-xl bg-red-950/70 border border-red-700/80 text-red-200 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              <span>You cannot post yet because your school has not been approved or you do not belong to an approved school.</span>
+            </div>
+          )}
 
           {/* Submit */}
           <button
             type="submit"
-            disabled={isProcessing}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-red-900 to-rose-950 hover:from-red-800 hover:to-rose-900 border border-red-700/80 text-white font-gothic text-xs font-bold tracking-wider uppercase transition-all shadow-md flex items-center justify-center gap-2"
+            disabled={isProcessing || !canPost}
+            className={`w-full py-3 rounded-xl border text-white font-gothic text-xs font-bold tracking-wider uppercase transition-all shadow-md flex items-center justify-center gap-2 ${
+              canPost
+                ? 'bg-gradient-to-r from-red-900 to-rose-950 hover:from-red-800 hover:to-rose-900 border-red-700/80'
+                : 'bg-[#181a24] text-slate-500 border-[#2b3042] cursor-not-allowed opacity-60'
+            }`}
           >
             {isProcessing ? (
               <>

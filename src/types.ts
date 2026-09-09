@@ -14,6 +14,7 @@ export interface User {
   bio?: string;
   year?: string;
   createdAt: string;
+  lastSchoolSwitchedAt?: string; // ISO timestamp of last school switch (30-day cooldown for students, 0 cooldown for creator)
 }
 
 export type SchoolStatus = 'approved' | 'pending' | 'declined';

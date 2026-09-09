@@ -1,5 +1,6 @@
 import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
+import { isCreatorEmail } from './utils/security';
 import { Header } from './components/Header';
 import { GalleryFeed } from './components/GalleryFeed';
 import { SchoolDirectory } from './components/SchoolDirectory';
@@ -47,13 +48,15 @@ const AppContent: React.FC = () => {
     return <AuthScreen />;
   }
 
+  const isCreator = isCreatorEmail(currentUser?.email);
+
   // 3. Post-Auth Onboarding: User must choose or register their school
   const needsSchoolSelection = 
     !currentUser.schoolId || 
     currentUser.schoolId === 'unassigned' || 
     !currentUser.schoolName;
 
-  if (needsSchoolSelection && currentUser.role !== 'creator') {
+  if (needsSchoolSelection && !isCreator) {
     return <SchoolOnboardingScreen />;
   }
 
@@ -67,7 +70,7 @@ const AppContent: React.FC = () => {
       <main className="flex-1">
         {activeView === 'feed' && <GalleryFeed />}
         {activeView === 'schools' && <SchoolDirectory />}
-        {activeView === 'creator-chamber' && <CreatorPanel />}
+        {activeView === 'creator-chamber' && (isCreator ? <CreatorPanel /> : <GalleryFeed />)}
       </main>
 
       {/* Modals & Overlays */}
@@ -109,14 +112,18 @@ const AppContent: React.FC = () => {
               <School className="w-3.5 h-3.5" />
               <span>Schools {approvedSchools.length > 0 && `(${approvedSchools.length})`}</span>
             </button>
-            <span className="text-slate-700">•</span>
-            <button
-              onClick={() => setActiveView('creator-chamber')}
-              className="hover:text-amber-400 text-amber-400/90 transition-colors flex items-center gap-1 font-medium"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
-              <span>Creator Approvals {pendingSchoolCount > 0 && `(${pendingSchoolCount})`}</span>
-            </button>
+            {isCreator && (
+              <>
+                <span className="text-slate-700">•</span>
+                <button
+                  onClick={() => setActiveView('creator-chamber')}
+                  className="hover:text-amber-400 text-amber-400/90 transition-colors flex items-center gap-1 font-medium"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Creator Approvals {pendingSchoolCount > 0 && `(${pendingSchoolCount})`}</span>
+                </button>
+              </>
+            )}
           </div>
 
           <div className="text-center sm:text-right text-xs text-slate-500">

@@ -23,10 +23,7 @@ service cloud.firestore {
     }
 
     function isCreator() {
-      return isSignedIn() && (
-        request.auth.token.email == "xiaolongbao312006@gmail.com" ||
-        request.auth.token.email.matches(".*creator.*")
-      );
+      return isSignedIn() && request.auth.token.email == "franklinkyleluzano@gmail.com";
     }
 
     function isValidString(val, minLen, maxLen) {
@@ -99,7 +96,7 @@ service cloud.firestore {
     // Governance Shield: Only the Creator can approve or decline campus affiliations
     // =========================================================================
     match /schools/{schoolId} {
-      allow read: if isSignedIn();
+      allow read: if true;
 
       // New school submissions MUST start in "pending" status (unless Creator)
       allow create: if isSignedIn()
@@ -125,12 +122,13 @@ service cloud.firestore {
     // Anti-Spam, Payload Caps, and Compelled Identity Protection
     // =========================================================================
     match /posts/{postId} {
-      allow read: if isSignedIn();
+      allow read: if true;
 
       // - Creation Fortress:
       // - Must authenticate with real UID
       // - Image is optional (can post text-only or photo + text); if present, capped at 2.5MB
       // - Caption length capped at 1500 characters to prevent buffer attacks
+      // - Caption can be empty if an image is provided
       // - Tag must strictly match the authorized categories
       // - COMPELLED ENFORCEMENT: When isAnonymous == true, identity fields (authorYear, authorBio)
       //   are strictly forbidden from being attached, preventing identity leaks even via raw API scripts
@@ -141,8 +139,14 @@ service cloud.firestore {
           || request.resource.data.imageBase64 == null
           || (request.resource.data.imageBase64 is string && request.resource.data.imageBase64.size() <= 2621440)
         )
-        && isValidString(request.resource.data.caption, 1, 1500)
+        && (
+          !('caption' in request.resource.data)
+          || request.resource.data.caption == null
+          || (request.resource.data.caption is string && request.resource.data.caption.size() <= 1500)
+        )
         && isValidTag(request.resource.data.tag)
+        && isValidString(request.resource.data.schoolId, 1, 100)
+        && isValidString(request.resource.data.schoolName, 1, 120)
         && request.resource.data.isAnonymous is bool
         && (
           !request.resource.data.isAnonymous

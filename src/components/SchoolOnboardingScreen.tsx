@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { isCreatorEmail } from '../utils/security';
 import { 
   Building2, 
   Search, 
@@ -9,7 +10,8 @@ import {
   ArrowRight, 
   ShieldCheck, 
   LogOut,
-  Sparkles
+  Sparkles,
+  Users
 } from 'lucide-react';
 import logoImg from '../assets/images/gothic_school_logo_1788974588737.jpg';
 
@@ -19,7 +21,8 @@ export const SchoolOnboardingScreen: React.FC = () => {
     approvedSchools, 
     selectUserSchool, 
     submitNewSchool, 
-    logout 
+    logout,
+    getSchoolMemberCount
   } = useApp();
 
   const [selectedSchoolId, setSelectedSchoolId] = useState<string>('');
@@ -119,7 +122,7 @@ export const SchoolOnboardingScreen: React.FC = () => {
         <div className="p-5 sm:p-6 overflow-y-auto space-y-6 flex-1">
           
           {/* Creator Bypass Option */}
-          {currentUser.role === 'creator' && (
+          {isCreatorEmail(currentUser?.email) && (
             <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-700/60 flex items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2.5">
                 <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0" />
@@ -221,11 +224,17 @@ export const SchoolOnboardingScreen: React.FC = () => {
                               <span className="font-semibold text-xs block truncate">
                                 {school.name}
                               </span>
-                              {(school.city || school.country) && (
-                                <span className="text-[10px] text-slate-400 block truncate">
-                                  📍 {[school.city, school.country].filter(Boolean).join(', ')}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {(school.city || school.country) && (
+                                  <span className="text-[10px] text-slate-400 block truncate">
+                                    📍 {[school.city, school.country].filter(Boolean).join(', ')}
+                                  </span>
+                                )}
+                                <span className="text-[10px] text-red-400/90 font-mono flex items-center gap-1">
+                                  <Users className="w-2.5 h-2.5" />
+                                  <span>{getSchoolMemberCount(school.id)} {getSchoolMemberCount(school.id) === 1 ? 'member' : 'members'}</span>
                                 </span>
-                              )}
+                              </div>
                             </div>
                           </div>
 

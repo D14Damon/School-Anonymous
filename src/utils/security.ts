@@ -103,11 +103,14 @@ export const validatePasswordStrength = (password: string): { strong: boolean; m
 };
 
 // 5. Creator Authorization Verification
-export const CREATOR_EMAIL = 'xiaolongbao312006@gmail.com';
+export const CREATOR_EMAILS = [
+  'franklinkyleluzano@gmail.com',
+];
 
 export const isCreatorEmail = (email?: string | null): boolean => {
   if (!email) return false;
-  return email.trim().toLowerCase() === CREATOR_EMAIL.toLowerCase();
+  const clean = email.trim().toLowerCase();
+  return clean === 'franklinkyleluzano@gmail.com';
 };
 
 // 6. Anonymous Nickname Validation
@@ -127,3 +130,122 @@ export const validateAnonymousNickname = (nickname: string): { valid: boolean; m
   }
   return { valid: true };
 };
+
+// 7. School Switching 30-Day Cooldown Policy
+export const SCHOOL_SWITCH_COOLDOWN_DAYS = 30;
+export const SCHOOL_SWITCH_COOLDOWN_MS = SCHOOL_SWITCH_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+
+export interface SchoolSwitchCooldownStatus {
+  canSwitch: boolean;
+  isCreator: boolean;
+  remainingMs: number;
+  remainingDays: number;
+  remainingHours: number;
+  remainingMinutes: number;
+  formattedRemaining: string;
+  nextAvailableDate?: Date;
+  reason?: string;
+}
+
+export const checkSchoolSwitchCooldown = (
+  user: { role?: string; email?: string | null; lastSchoolSwitchedAt?: string } | null
+): SchoolSwitchCooldownStatus => {
+  if (!user) {
+    return {
+      canSwitch: false,
+      isCreator: false,
+      remainingMs: 0,
+      remainingDays: 0,
+      remainingHours: 0,
+      remainingMinutes: 0,
+      formattedRemaining: 'Not signed in',
+      reason: 'You must be signed in to switch schools.',
+    };
+  }
+
+  // Creator account has ZERO cooldown - can switch school anytime without waiting
+  const isCreator = user.role === 'creator' || isCreatorEmail(user.email);
+  if (isCreator) {
+    return {
+      canSwitch: true,
+      isCreator: true,
+      remainingMs: 0,
+      remainingDays: 0,
+      remainingHours: 0,
+      remainingMinutes: 0,
+      formattedRemaining: 'No cooldown (Creator Privilege)',
+    };
+  }
+
+  // If student has never switched school yet, they can switch immediately
+  if (!user.lastSchoolSwitchedAt) {
+    return {
+      canSwitch: true,
+      isCreator: false,
+      remainingMs: 0,
+      remainingDays: 0,
+      remainingHours: 0,
+      remainingMinutes: 0,
+      formattedRemaining: 'Available now',
+    };
+  }
+
+  const lastSwitchTime = new Date(user.lastSchoolSwitchedAt).getTime();
+  if (isNaN(lastSwitchTime)) {
+    return {
+      canSwitch: true,
+      isCreator: false,
+      remainingMs: 0,
+      remainingDays: 0,
+      remainingHours: 0,
+      remainingMinutes: 0,
+      formattedRemaining: 'Available now',
+    };
+  }
+
+  const now = Date.now();
+  const elapsed = now - lastSwitchTime;
+  const remainingMs = SCHOOL_SWITCH_COOLDOWN_MS - elapsed;
+
+  // Cooldown has expired
+  if (remainingMs <= 0) {
+    return {
+      canSwitch: true,
+      isCreator: false,
+      remainingMs: 0,
+      remainingDays: 0,
+      remainingHours: 0,
+      remainingMinutes: 0,
+      formattedRemaining: 'Available now',
+    };
+  }
+
+  // Cooldown is active
+  const remainingDays = Math.floor(remainingMs / (24 * 60 * 60 * 1000));
+  const remainingHours = Math.floor((remainingMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  const remainingMinutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+
+  let formattedRemaining = '';
+  if (remainingDays > 0) {
+    formattedRemaining = `${remainingDays}d ${remainingHours}h remaining`;
+  } else if (remainingHours > 0) {
+    formattedRemaining = `${remainingHours}h ${remainingMinutes}m remaining`;
+  } else {
+    formattedRemaining = `${Math.max(1, remainingMinutes)}m remaining`;
+  }
+
+  const nextAvailableDate = new Date(lastSwitchTime + SCHOOL_SWITCH_COOLDOWN_MS);
+
+  return {
+    canSwitch: false,
+    isCreator: false,
+    remainingMs,
+    remainingDays,
+    remainingHours,
+    remainingMinutes,
+    formattedRemaining,
+    nextAvailableDate,
+    reason: `School transfer is locked. 30-day cooldown active until ${nextAvailableDate.toLocaleDateString()}. (${formattedRemaining})`,
+  };
+};
+

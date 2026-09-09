@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { isCreatorEmail } from '../utils/security';
 import { 
   Eye, 
   EyeOff, 
@@ -9,7 +10,10 @@ import {
   Image as ImageIcon, 
   LogOut, 
   User as UserIcon,
-  ChevronDown
+  ChevronDown,
+  ArrowLeftRight,
+  ShieldCheck as ShieldCheckIcon,
+  Users
 } from 'lucide-react';
 import logoImg from '../assets/images/gothic_school_logo_1788974588737.jpg';
 
@@ -27,10 +31,17 @@ export const Header: React.FC = () => {
     setIsProfileModalOpen,
     setIsCreatePostModalOpen,
     logout,
+    schoolSwitchCooldown,
+    getSchoolMemberCount,
   } = useApp();
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isSchoolSelectOpen, setIsSchoolSelectOpen] = useState(false);
+
+  const isCreator = isCreatorEmail(currentUser?.email);
+  const hasApprovedSchool = approvedSchools.length > 0 && 
+    Boolean(currentUser?.schoolId && currentUser.schoolId !== 'unassigned' && approvedSchools.some((s) => s.id === currentUser.schoolId));
+  const canPost = approvedSchools.length > 0 && (isCreator || hasApprovedSchool);
 
   const selectedSchool = approvedSchools.find((s) => s.id === activeSchoolFilter) || 
     approvedSchools.find((s) => s.id === currentUser?.schoolId) ||
@@ -128,7 +139,15 @@ export const Header: React.FC = () => {
               }`}
             >
               <SchoolIcon className="w-4 h-4 text-red-500" />
-              <span>{currentUser?.schoolName ? `${currentUser.schoolName.split(' ')[0]} Campus` : 'School Campus'}</span>
+              <span className="truncate max-w-[150px]">
+                {currentUser?.role === 'creator'
+                  ? (activeSchoolFilter && activeSchoolFilter !== 'all'
+                      ? (approvedSchools.find((s) => s.id === activeSchoolFilter)?.name || 'Campus Feed')
+                      : 'Campus Feed')
+                  : currentUser?.schoolId && approvedSchools.some((s) => s.id === currentUser.schoolId)
+                  ? `${currentUser.schoolName || 'Campus'} Feed`
+                  : 'Campus Feed'}
+              </span>
             </button>
 
             <button
@@ -139,46 +158,50 @@ export const Header: React.FC = () => {
                   : 'text-slate-400 hover:text-slate-200 hover:bg-[#141622]'
               }`}
             >
-              <span>Explore Schools {approvedSchools.length > 0 && `(${approvedSchools.length})`}</span>
+              <span>Switch School {approvedSchools.length > 0 && `(${approvedSchools.length})`}</span>
             </button>
 
-            {/* Creator Approvals */}
-            <button
-              onClick={() => setActiveView('creator-chamber')}
-              className={`relative px-3 py-2 rounded-lg text-xs uppercase tracking-wider font-semibold transition-all flex items-center gap-1.5 ${
-                activeView === 'creator-chamber'
-                  ? 'bg-amber-950/40 text-amber-300 border border-amber-800/50'
-                  : 'text-amber-400/80 hover:text-amber-300 hover:bg-[#1a1614]'
-              }`}
-            >
-              <ShieldCheck className="w-4 h-4 text-amber-400" />
-              <span>Creator Approvals</span>
-              {pendingSchoolCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-red-600 text-white text-[10px] font-mono animate-pulse">
-                  {pendingSchoolCount}
-                </span>
-              )}
-            </button>
+            {/* Creator Approvals - Strictly for Creator Account Only */}
+            {isCreator && (
+              <button
+                onClick={() => setActiveView('creator-chamber')}
+                className={`relative px-3 py-2 rounded-lg text-xs uppercase tracking-wider font-semibold transition-all flex items-center gap-1.5 ${
+                  activeView === 'creator-chamber'
+                    ? 'bg-amber-950/40 text-amber-300 border border-amber-800/50'
+                    : 'text-amber-400/80 hover:text-amber-300 hover:bg-[#1a1614]'
+                }`}
+              >
+                <ShieldCheck className="w-4 h-4 text-amber-400" />
+                <span>Creator Approvals</span>
+                {pendingSchoolCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-red-600 text-white text-[10px] font-mono animate-pulse">
+                    {pendingSchoolCount}
+                  </span>
+                )}
+              </button>
+            )}
           </nav>
 
           {/* Right Action Bar */}
           <div className="flex items-center space-x-2 sm:space-x-3">
             
-            {/* Create Post Button */}
-            <button
-              onClick={() => {
-                if (!currentUser) {
-                  setIsAuthModalOpen(true);
-                } else {
-                  setIsCreatePostModalOpen(true);
-                }
-              }}
-              className="flex items-center space-x-1 px-3 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-red-900 to-rose-950 hover:from-red-800 hover:to-rose-900 border border-red-700/60 text-white text-xs font-semibold tracking-wide transition-all shadow-md active:scale-95"
-            >
-              <PlusCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-300" />
-              <span className="hidden sm:inline">Post</span>
-              <span className="sm:hidden">Post</span>
-            </button>
+            {/* Create Post Button - Only visible if an approved school exists and user belongs to it or is creator */}
+            {canPost && (
+              <button
+                onClick={() => {
+                  if (!currentUser) {
+                    setIsAuthModalOpen(true);
+                  } else {
+                    setIsCreatePostModalOpen(true);
+                  }
+                }}
+                className="flex items-center space-x-1 px-3 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-red-900 to-rose-950 hover:from-red-800 hover:to-rose-900 border border-red-700/60 text-white text-xs font-semibold tracking-wide transition-all shadow-md active:scale-95"
+              >
+                <PlusCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-300" />
+                <span className="hidden sm:inline">Post</span>
+                <span className="sm:hidden">Post</span>
+              </button>
+            )}
 
             {/* User Profile / Compelled Controls */}
             {currentUser ? (
@@ -250,8 +273,14 @@ export const Header: React.FC = () => {
                             : 'Compelled Scholar'
                           : currentUser.name}
                       </div>
-                      <div className="text-[11px] text-slate-400 truncate mt-0.5">
-                        {currentUser.schoolName}
+                      <div className="text-[11px] text-slate-400 truncate mt-0.5 flex items-center justify-between">
+                        <span className="truncate">{currentUser.schoolName || 'No Campus'}</span>
+                        {currentUser.schoolId && currentUser.schoolId !== 'unassigned' && (
+                          <span className="text-red-400 font-mono text-[10px] flex items-center gap-1 shrink-0 ml-1">
+                            <Users className="w-2.5 h-2.5" />
+                            <span>{getSchoolMemberCount(currentUser.schoolId)} {getSchoolMemberCount(currentUser.schoolId) === 1 ? 'member' : 'members'}</span>
+                          </span>
+                        )}
                       </div>
                       <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-mono">
                         <span className={`w-1.5 h-1.5 rounded-full ${currentUser.isAnonymous ? 'bg-red-500' : 'bg-emerald-500'}`}></span>
@@ -273,6 +302,32 @@ export const Header: React.FC = () => {
                       >
                         <UserIcon className="w-4 h-4 text-slate-400" />
                         <span>Edit Profile</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setActiveView('schools');
+                          setIsDropdownOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-[#1f2334] rounded-lg transition-colors flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-2">
+                          <ArrowLeftRight className="w-4 h-4 text-red-400" />
+                          <span>Switch School</span>
+                        </div>
+                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                          schoolSwitchCooldown.isCreator
+                            ? 'bg-amber-950/80 text-amber-300 border border-amber-800/60'
+                            : schoolSwitchCooldown.canSwitch
+                            ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'
+                            : 'bg-red-950/80 text-red-300 border border-red-800/60'
+                        }`}>
+                          {schoolSwitchCooldown.isCreator
+                            ? 'No Cooldown'
+                            : schoolSwitchCooldown.canSwitch
+                            ? 'Available'
+                            : schoolSwitchCooldown.formattedRemaining}
+                        </span>
                       </button>
 
                       <button
@@ -300,23 +355,25 @@ export const Header: React.FC = () => {
                         </span>
                       </button>
 
-                      <button
-                        onClick={() => {
-                          setActiveView('creator-chamber');
-                          setIsDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-2 text-xs text-amber-300 hover:bg-amber-950/30 rounded-lg transition-colors flex items-center justify-between"
-                      >
-                        <div className="flex items-center gap-2">
-                          <ShieldCheck className="w-4 h-4 text-amber-400" />
-                          <span>Creator Panel</span>
-                        </div>
-                        {pendingSchoolCount > 0 && (
-                          <span className="px-1.5 py-0.5 rounded bg-red-600 text-white text-[10px] font-mono">
-                            {pendingSchoolCount}
-                          </span>
-                        )}
-                      </button>
+                      {isCreator && (
+                        <button
+                          onClick={() => {
+                            setActiveView('creator-chamber');
+                            setIsDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs text-amber-300 hover:bg-amber-950/30 rounded-lg transition-colors flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-2">
+                            <ShieldCheck className="w-4 h-4 text-amber-400" />
+                            <span>Creator Panel</span>
+                          </div>
+                          {pendingSchoolCount > 0 && (
+                            <span className="px-1.5 py-0.5 rounded bg-red-600 text-white text-[10px] font-mono">
+                              {pendingSchoolCount}
+                            </span>
+                          )}
+                        </button>
+                      )}
                     </div>
 
                     <div className="pt-1 border-t border-[#232736]">
@@ -367,19 +424,21 @@ export const Header: React.FC = () => {
               activeView === 'schools' ? 'text-red-400 font-bold bg-[#171a25]' : 'text-slate-400'
             }`}
           >
-            Schools {approvedSchools.length > 0 && `(${approvedSchools.length})`}
+            Switch School {approvedSchools.length > 0 && `(${approvedSchools.length})`}
           </button>
-          <button
-            onClick={() => setActiveView('creator-chamber')}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 ${
-              activeView === 'creator-chamber' ? 'text-amber-400 font-bold bg-[#1c1815]' : 'text-slate-400'
-            }`}
-          >
-            Creator
-            {pendingSchoolCount > 0 && (
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-            )}
-          </button>
+          {isCreator && (
+            <button
+              onClick={() => setActiveView('creator-chamber')}
+              className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 ${
+                activeView === 'creator-chamber' ? 'text-amber-400 font-bold bg-[#1c1815]' : 'text-slate-400'
+              }`}
+            >
+              Creator
+              {pendingSchoolCount > 0 && (
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </header>

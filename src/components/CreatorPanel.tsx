@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { isCreatorEmail } from '../utils/security';
 import { 
   ShieldCheck, 
   CheckCircle2, 
   XCircle, 
   Clock, 
   Building2, 
-  PlusCircle
+  PlusCircle,
+  Trash2
 } from 'lucide-react';
 
 export const CreatorPanel: React.FC = () => {
@@ -15,6 +17,7 @@ export const CreatorPanel: React.FC = () => {
     schools,
     approveSchool,
     declineSchool,
+    deleteSchool,
     submitNewSchool,
     setActiveView,
     setActiveSchoolFilter,
@@ -23,6 +26,7 @@ export const CreatorPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'declined'>('pending');
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Quick creator add school state
   const [newSchoolName, setNewSchoolName] = useState('');
@@ -34,7 +38,27 @@ export const CreatorPanel: React.FC = () => {
   const approvedSchools = schools.filter((s) => s.status === 'approved');
   const declinedSchools = schools.filter((s) => s.status === 'declined');
 
-  const isCreator = currentUser?.role === 'creator';
+  const isCreator = isCreatorEmail(currentUser?.email);
+
+  if (!isCreator) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-20 text-center space-y-4">
+        <div className="w-12 h-12 rounded-full bg-red-950/70 border border-red-800 text-red-400 flex items-center justify-center mx-auto">
+          <ShieldCheck className="w-6 h-6" />
+        </div>
+        <h2 className="text-xl font-gothic font-bold text-slate-100">Restricted to Website Creator</h2>
+        <p className="text-xs text-slate-400">
+          This panel is solely authorized for franklinkyleluzano@gmail.com.
+        </p>
+        <button
+          onClick={() => setActiveView('feed')}
+          className="px-4 py-2 rounded-xl bg-red-900 hover:bg-red-800 text-white text-xs font-semibold"
+        >
+          Return to Feed
+        </button>
+      </div>
+    );
+  }
 
   const handleApprove = (schoolId: string, schoolName: string) => {
     const note = reviewNotes[schoolId] || 'Approved by Website Creator';
@@ -355,6 +379,29 @@ export const CreatorPanel: React.FC = () => {
                     >
                       View Feed →
                     </button>
+
+                    <button
+                      onClick={async () => {
+                        if (confirmDeleteId !== school.id) {
+                          setConfirmDeleteId(school.id);
+                          setTimeout(() => setConfirmDeleteId(null), 4000);
+                          return;
+                        }
+                        await deleteSchool(school.id);
+                        setConfirmDeleteId(null);
+                        setSuccessToast(`Deleted "${school.name}".`);
+                        setTimeout(() => setSuccessToast(null), 3000);
+                      }}
+                      className={`px-2 py-1 rounded transition-colors text-[11px] flex items-center gap-1 ${
+                        confirmDeleteId === school.id
+                          ? 'bg-red-600 text-white font-bold animate-pulse'
+                          : 'text-slate-500 hover:text-red-400 hover:bg-red-950/40'
+                      }`}
+                      title="Delete school campus"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{confirmDeleteId === school.id ? 'Confirm?' : 'Delete'}</span>
+                    </button>
                   </div>
                 </div>
               ))}
@@ -382,12 +429,35 @@ export const CreatorPanel: React.FC = () => {
                     {school.moderationNote || 'Declined'}
                   </p>
                 </div>
-                <button
-                  onClick={() => handleApprove(school.id, school.name)}
-                  className="px-3 py-1.5 rounded bg-[#1e2230] hover:bg-emerald-950 hover:text-emerald-300 text-slate-300 transition-colors text-[11px]"
-                >
-                  Approve
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleApprove(school.id, school.name)}
+                    className="px-3 py-1.5 rounded bg-[#1e2230] hover:bg-emerald-950 hover:text-emerald-300 text-slate-300 transition-colors text-[11px]"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (confirmDeleteId !== school.id) {
+                        setConfirmDeleteId(school.id);
+                        setTimeout(() => setConfirmDeleteId(null), 4000);
+                        return;
+                      }
+                      await deleteSchool(school.id);
+                      setConfirmDeleteId(null);
+                      setSuccessToast(`Deleted "${school.name}".`);
+                      setTimeout(() => setSuccessToast(null), 3000);
+                    }}
+                    className={`px-2 py-1.5 rounded transition-colors text-[11px] flex items-center gap-1 ${
+                      confirmDeleteId === school.id
+                        ? 'bg-red-600 text-white font-bold animate-pulse'
+                        : 'text-slate-500 hover:text-red-400 hover:bg-red-950/40'
+                    }`}
+                    title="Permanently remove"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             ))
           )}

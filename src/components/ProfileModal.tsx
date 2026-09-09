@@ -9,7 +9,12 @@ import {
   Save, 
   Check, 
   School as SchoolIcon,
-  Loader2
+  Loader2,
+  ShieldCheck,
+  Lock,
+  CheckCircle2,
+  ArrowLeftRight,
+  AlertTriangle
 } from 'lucide-react';
 
 export const ProfileModal: React.FC = () => {
@@ -20,6 +25,9 @@ export const ProfileModal: React.FC = () => {
     updateProfile,
     checkNicknameAvailability,
     posts,
+    approvedSchools,
+    switchSchool,
+    schoolSwitchCooldown,
   } = useApp();
 
   const [name, setName] = useState(currentUser?.name || '');
@@ -34,6 +42,12 @@ export const ProfileModal: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [isCheckingNick, setIsCheckingNick] = useState(false);
   const [nickCheckResult, setNickCheckResult] = useState<{ available?: boolean; message?: string } | null>(null);
+
+  // School transfer inside profile modal
+  const [isTransferringSchool, setIsTransferringSchool] = useState(false);
+  const [targetSchoolId, setTargetSchoolId] = useState('');
+  const [schoolTransferLoading, setSchoolTransferLoading] = useState(false);
+  const [schoolTransferMsg, setSchoolTransferMsg] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -329,21 +343,169 @@ export const ProfileModal: React.FC = () => {
               </div>
             </div>
 
-            {/* School Affiliation */}
-            <div className="p-3 rounded-xl bg-[#13151f] border border-[#252a3b] flex items-center justify-between text-xs">
-              <div className="flex items-center space-x-2.5">
-                <div className="p-1.5 rounded-lg bg-red-950/60 text-red-400">
-                  <SchoolIcon className="w-4 h-4" />
+            {/* School Affiliation & Transfer */}
+            <div className="p-3.5 rounded-xl bg-[#13151f] border border-[#252a3b] space-y-3 text-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2.5">
+                  <div className="p-1.5 rounded-lg bg-red-950/60 text-red-400">
+                    <SchoolIcon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">
+                      Enrolled School
+                    </span>
+                    <span className="font-bold text-slate-200">
+                      {currentUser.schoolName || 'Independent Scholar'}
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block">
-                    Enrolled School
+
+                {/* Cooldown or Creator Tag */}
+                {schoolSwitchCooldown.isCreator ? (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-950/70 text-amber-300 border border-amber-600/50 text-[10px] font-mono flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-amber-400" />
+                    Creator (No Cooldown)
                   </span>
-                  <span className="font-bold text-slate-200">
-                    {currentUser.schoolName || 'Independent'}
+                ) : schoolSwitchCooldown.canSwitch ? (
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-950/70 text-emerald-300 border border-emerald-700/50 text-[10px] font-mono flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    Transfer Eligible
                   </span>
-                </div>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full bg-red-950/70 text-red-300 border border-red-800/50 text-[10px] font-mono flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-red-400" />
+                    Cooldown: {schoolSwitchCooldown.formattedRemaining}
+                  </span>
+                )}
               </div>
+
+              {/* Transfer Trigger Button */}
+              {!isTransferringSchool ? (
+                <div className="pt-1 flex items-center justify-between border-t border-[#1e2232]">
+                  <span className="text-[11px] text-slate-400">
+                    {schoolSwitchCooldown.isCreator
+                      ? 'You can transfer to any campus instantly with no cooldown.'
+                      : schoolSwitchCooldown.canSwitch
+                      ? 'Every student can transfer with a 30-day cooldown period.'
+                      : `Transfer locked until ${schoolSwitchCooldown.nextAvailableDate?.toLocaleDateString() || 'cooldown ends'}.`}
+                  </span>
+                  
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTransferringSchool(true);
+                      setSchoolTransferMsg(null);
+                      setTargetSchoolId('');
+                    }}
+                    disabled={!schoolSwitchCooldown.canSwitch && !schoolSwitchCooldown.isCreator}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0 ${
+                      schoolSwitchCooldown.canSwitch || schoolSwitchCooldown.isCreator
+                        ? 'bg-[#1e2232] hover:bg-red-950 text-slate-200 hover:text-red-200 border border-[#2e354c]'
+                        : 'bg-[#151722] text-slate-500 border border-[#202434] cursor-not-allowed'
+                    }`}
+                  >
+                    <ArrowLeftRight className="w-3.5 h-3.5" />
+                    <span>Switch School</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="pt-2 border-t border-[#1e2232] space-y-2.5 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-200 text-xs flex items-center gap-1.5">
+                      <ArrowLeftRight className="w-3.5 h-3.5 text-red-400" />
+                      Select Target School
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsTransferringSchool(false)}
+                      className="text-[11px] text-slate-400 hover:text-white"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+
+                  <select
+                    value={targetSchoolId}
+                    onChange={(e) => setTargetSchoolId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-[#141620] border border-[#2b3042] text-xs text-slate-100 focus:outline-none focus:border-red-600"
+                  >
+                    <option value="">-- Choose Approved School --</option>
+                    {approvedSchools
+                      .filter((s) => s.id !== currentUser.schoolId)
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} {s.city ? `(${s.city})` : ''}
+                        </option>
+                      ))}
+                  </select>
+
+                  {schoolSwitchCooldown.isCreator ? (
+                    <div className="p-2 rounded-lg bg-amber-950/40 border border-amber-600/50 text-[11px] text-amber-300 flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 shrink-0 text-amber-400" />
+                      <span>Creator account: Unlimited switches with 0 cooldown.</span>
+                    </div>
+                  ) : (
+                    <div className="p-2 rounded-lg bg-red-950/40 border border-red-800/60 text-[11px] text-red-300 flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
+                      <span>Note: Transferring will activate a 30-day transfer cooldown.</span>
+                    </div>
+                  )}
+
+                  {schoolTransferMsg && (
+                    <div className={`p-2 rounded-lg text-xs ${
+                      schoolTransferMsg.type === 'error' 
+                        ? 'bg-red-950/70 border border-red-700 text-red-300' 
+                        : 'bg-emerald-950/70 border border-emerald-700 text-emerald-300'
+                    }`}>
+                      {schoolTransferMsg.text}
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsTransferringSchool(false)}
+                      className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white text-xs"
+                    >
+                      Close
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!targetSchoolId || schoolTransferLoading}
+                      onClick={async () => {
+                        const target = approvedSchools.find((s) => s.id === targetSchoolId);
+                        if (!target) return;
+                        setSchoolTransferLoading(true);
+                        setSchoolTransferMsg(null);
+                        const res = await switchSchool(target.id, target.name);
+                        setSchoolTransferLoading(false);
+                        if (res.success) {
+                          setSchoolTransferMsg({ type: 'success', text: `Enrolled into ${target.name}!` });
+                          setTimeout(() => {
+                            setIsTransferringSchool(false);
+                            setSchoolTransferMsg(null);
+                          }, 2000);
+                        } else {
+                          setSchoolTransferMsg({ type: 'error', text: res.error || 'Failed to switch school' });
+                        }
+                      }}
+                      className="px-4 py-1.5 rounded-lg bg-red-900 hover:bg-red-800 text-white font-semibold text-xs transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {schoolTransferLoading ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Switching...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ArrowLeftRight className="w-3.5 h-3.5" />
+                          <span>Confirm Switch</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Bio */}

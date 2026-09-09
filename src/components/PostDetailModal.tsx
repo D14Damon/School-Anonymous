@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatPhilippineDateTime } from '../utils/dateUtils';
+import { isCreatorEmail } from '../utils/security';
 import { 
   X, 
   Send, 
   EyeOff, 
-  School as SchoolIcon,
-  Clock
+  School as SchoolIcon, 
+  Clock,
+  Trash2,
+  ShieldAlert
 } from 'lucide-react';
 
 export const PostDetailModal: React.FC = () => {
@@ -16,13 +19,33 @@ export const PostDetailModal: React.FC = () => {
     currentUser,
     addComment,
     reactToPost,
+    deletePost,
   } = useApp();
 
   const [commentText, setCommentText] = useState('');
   const [isAnonymousComment, setIsAnonymousComment] = useState(currentUser?.isAnonymous || false);
   const [commentError, setCommentError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   if (!selectedPost) return null;
+
+  const isCreator = currentUser?.role === 'creator' || isCreatorEmail(currentUser?.email);
+  const isAuthor = currentUser?.id === selectedPost.userId;
+  const canDelete = isCreator || isAuthor;
+
+  const handleDelete = async () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      setTimeout(() => setConfirmDelete(false), 4000);
+      return;
+    }
+
+    setIsDeleting(true);
+    await deletePost(selectedPost.id);
+    setIsDeleting(false);
+    setSelectedPost(null);
+  };
 
   const userReaction = currentUser ? selectedPost.userReactions?.[currentUser.id] : undefined;
   const pht = formatPhilippineDateTime(selectedPost.createdAt);
@@ -50,13 +73,40 @@ export const PostDetailModal: React.FC = () => {
         className={`relative w-full ${hasImage ? 'max-w-4xl flex-col md:flex-row' : 'max-w-2xl flex-col'} bg-[#0f1118] border border-[#2b3044] rounded-2xl shadow-2xl overflow-hidden my-auto flex max-h-[92vh]`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Close Button */}
-        <button
-          onClick={() => setSelectedPost(null)}
-          className="absolute top-3 right-3 z-20 p-2 rounded-full bg-black/70 hover:bg-red-950 text-slate-300 hover:text-white border border-white/10 transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        {/* Actions in top right: Delete (Creator/Author) + Close */}
+        <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
+          {canDelete && (
+            <button
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className={`p-2 rounded-full transition-colors border flex items-center gap-1.5 ${
+                confirmDelete
+                  ? 'bg-red-600 text-white border-red-400 text-xs font-mono px-3 animate-pulse'
+                  : isCreator
+                  ? 'bg-red-950/80 hover:bg-red-900 text-red-300 border-red-800'
+                  : 'bg-black/70 hover:bg-red-950 text-slate-300 hover:text-white border-white/10'
+              }`}
+              title={isCreator ? "Delete Post (Website Creator Authority)" : "Delete Post"}
+            >
+              <Trash2 className="w-4 h-4" />
+              {confirmDelete ? (
+                <span>Confirm Delete?</span>
+              ) : isCreator ? (
+                <span className="text-[10px] font-mono pr-1 flex items-center gap-1">
+                  <ShieldAlert className="w-3 h-3 text-amber-400" />
+                  <span>Delete</span>
+                </span>
+              ) : null}
+            </button>
+          )}
+
+          <button
+            onClick={() => setSelectedPost(null)}
+            className="p-2 rounded-full bg-black/70 hover:bg-red-950 text-slate-300 hover:text-white border border-white/10 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
         {/* Left: 500x500 Picture Display (Only if image attached) */}
         {hasImage && (

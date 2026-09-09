@@ -9,7 +9,9 @@ import {
   clearRateLimit, 
   isCreatorEmail, 
   validatePasswordStrength,
-  validateAnonymousNickname
+  validateAnonymousNickname,
+  checkSchoolSwitchCooldown,
+  SchoolSwitchCooldownStatus
 } from '../utils/security';
 import { 
   auth, 
@@ -27,6 +29,8 @@ import {
   getDocs,
   addDoc, 
   updateDoc, 
+  deleteDoc,
+  increment,
   onSnapshot, 
   query, 
   orderBy,
@@ -67,6 +71,8 @@ interface AppContextType {
 
   // School selection & onboarding
   selectUserSchool: (schoolId: string, schoolName: string) => Promise<void>;
+  switchSchool: (schoolId: string, schoolName: string) => Promise<{ success: boolean; error?: string }>;
+  schoolSwitchCooldown: SchoolSwitchCooldownStatus;
   
   // Profile actions
   updateProfile: (updates: Partial<User>) => Promise<{ success: boolean; error?: string }>;
@@ -81,13 +87,17 @@ interface AppContextType {
   }) => Promise<{ success: boolean; error?: string }>;
   reactToPost: (postId: string, reactionType: keyof PostReactions) => Promise<void>;
   addComment: (postId: string, text: string, isAnonymous: boolean) => Promise<{ success: boolean; error?: string }>;
+  deletePost: (postId: string) => Promise<{ success: boolean; error?: string }>;
   
   // Creator / School Approval actions
   approveSchool: (schoolId: string, note?: string) => Promise<void>;
   declineSchool: (schoolId: string, note?: string) => Promise<void>;
+  deleteSchool: (schoolId: string) => Promise<{ success: boolean; error?: string }>;
   submitNewSchool: (name: string, city?: string, country?: string) => Promise<string>;
   pendingSchoolCount: number;
   approvedSchools: School[];
+  getSchoolMemberCount: (schoolId?: string) => number;
+  schoolMemberCounts: Record<string, number>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -131,20 +141,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
           if (docSnap.exists()) {
             const data = docSnap.data();
+            const shouldBeCreator = isCreator;
+            const updatedRole = shouldBeCreator ? 'creator' : (data.role || 'student');
+
+            // Sync role to Firestore doc: promote genuine creator, demote any non-creator
+            if (shouldBeCreator && data.role !== 'creator') {
+              try {
+                await updateDoc(userDocRef, { role: 'creator' });
+              } catch {
+                // ignore
+              }
+            } else if (!shouldBeCreator && data.role === 'creator') {
+              try {
+                await updateDoc(userDocRef, { role: 'student' });
+              } catch {
+                // ignore
+              }
+            }
+
+            // Restore Compelled status: check local storage first, then firestore doc
+            let restoredIsAnonymous = Boolean(data.isAnonymous);
+            try {
+              const localCompelled = localStorage.getItem('school_anonymous_compelled_' + fbUser.uid);
+              if (localCompelled !== null) {
+                restoredIsAnonymous = localCompelled === 'true';
+              }
+            } catch {
+              // ignore
+            }
+
             setCurrentUser({
               id: fbUser.uid,
               name: sanitizeText(data.name || fbUser.displayName || 'Scholar', 100),
               email: fbUser.email || '',
               avatarBase64: data.avatarBase64 || generateGothicCanvasBase64(data.name || 'Scholar', 'Enlisted', 'cathedral'),
-              isAnonymous: data.isAnonymous || false,
+              isAnonymous: restoredIsAnonymous,
               anonymousNickname: data.anonymousNickname || undefined,
               anonymousNicknameLower: data.anonymousNicknameLower || (data.anonymousNickname ? String(data.anonymousNickname).toLowerCase() : undefined),
-              schoolId: data.schoolId || 'unassigned',
-              schoolName: data.schoolName || '',
-              role: isCreator ? 'creator' : (data.role || 'student'),
+              schoolId: shouldBeCreator && (!data.schoolId || data.schoolId === 'unassigned') ? 'creator-hq' : (data.schoolId || 'unassigned'),
+              schoolName: shouldBeCreator && (!data.schoolName) ? 'Website Creator Council' : (data.schoolName || ''),
+              role: updatedRole,
               bio: sanitizeText(data.bio || '', 1000),
               year: sanitizeText(data.year || '', 50),
               createdAt: data.createdAt || new Date().toISOString(),
+              lastSchoolSwitchedAt: data.lastSchoolSwitchedAt || undefined,
             });
             if (data.schoolId && data.schoolId !== 'unassigned') {
               setActiveSchoolFilter(data.schoolId);
@@ -156,12 +196,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               'School Anonymous',
               'cathedral'
             );
+            let initialAnon = false;
+            try {
+              const localCompelled = localStorage.getItem('school_anonymous_compelled_' + fbUser.uid);
+              if (localCompelled !== null) initialAnon = localCompelled === 'true';
+            } catch {}
+
             const newUser: User = {
               id: fbUser.uid,
               name: sanitizeText(fbUser.displayName || fbUser.email?.split('@')[0] || 'Scholar', 100),
               email: fbUser.email || '',
               avatarBase64: defaultAvatar,
-              isAnonymous: false,
+              isAnonymous: initialAnon,
               schoolId: isCreator ? 'creator-hq' : 'unassigned',
               schoolName: isCreator ? 'Website Creator Council' : '',
               role,
@@ -178,12 +224,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         } catch {
           // Offline/fallback
+          let fallbackAnon = false;
+          try {
+            const localCompelled = localStorage.getItem('school_anonymous_compelled_' + fbUser.uid);
+            if (localCompelled !== null) fallbackAnon = localCompelled === 'true';
+          } catch {}
+
           const fallbackUser: User = {
             id: fbUser.uid,
             name: sanitizeText(fbUser.displayName || fbUser.email?.split('@')[0] || 'Scholar', 100),
             email: fbUser.email || '',
             avatarBase64: generateGothicCanvasBase64(fbUser.email?.split('@')[0] || 'Scholar', 'Verified', 'cathedral'),
-            isAnonymous: false,
+            isAnonymous: fallbackAnon,
             schoolId: isCreator ? 'creator-hq' : 'unassigned',
             schoolName: isCreator ? 'Website Creator Council' : '',
             role,
@@ -240,6 +292,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // ignore
     }
   }, []);
+
+  const [schoolMemberCounts, setSchoolMemberCounts] = useState<Record<string, number>>({});
+
+  // 4. Real-time School Member Counts listener from users collection
+  useEffect(() => {
+    try {
+      const usersCol = collection(db, 'users');
+      const unsubscribe = onSnapshot(usersCol, (snapshot) => {
+        const counts: Record<string, number> = {};
+        snapshot.forEach((docSnap) => {
+          const uData = docSnap.data();
+          const sId = uData.schoolId;
+          if (sId && sId !== 'unassigned' && sId !== 'creator-hq') {
+            counts[sId] = (counts[sId] || 0) + 1;
+          }
+        });
+        setSchoolMemberCounts(counts);
+      }, (err) => {
+        console.warn('Firestore users member listener note:', err.message);
+      });
+      return () => unsubscribe();
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const getSchoolMemberCount = (schoolId?: string): number => {
+    if (!schoolId || schoolId === 'unassigned') return 0;
+    const realtime = schoolMemberCounts[schoolId] || 0;
+    const sch = schools.find((s) => s.id === schoolId);
+    const staticCount = sch?.studentCount || 0;
+    return Math.max(realtime, staticCount, 0);
+  };
 
   const pendingSchoolCount = schools.filter((s) => s.status === 'pending').length;
   const approvedSchools = schools.filter((s) => s.status === 'approved');
@@ -449,16 +534,92 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setCurrentUser(updatedUser);
     setActiveSchoolFilter(schoolId);
+    setActiveView('feed');
 
     try {
       await updateDoc(doc(db, 'users', currentUser.id), {
         schoolId,
         schoolName: cleanSchoolName,
       });
+      if (schoolId && schoolId !== 'creator-hq' && schoolId !== 'unassigned') {
+        try {
+          await updateDoc(doc(db, 'schools', schoolId), {
+            studentCount: increment(1),
+          });
+        } catch {
+          // ignore
+        }
+      }
     } catch {
       // fallback
     }
   };
+
+  // SCHOOL SWITCHING WITH 30-DAY COOLDOWN (CREATOR EXEMPTION: NO COOLDOWN)
+  const switchSchool = async (
+    schoolId: string,
+    schoolName: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (!currentUser) {
+      return { success: false, error: 'You must be signed in to switch schools.' };
+    }
+
+    if (currentUser.schoolId === schoolId) {
+      return { success: false, error: 'You are already enrolled in this school.' };
+    }
+
+    // Check 30-day cooldown policy (creator has 0 cooldown)
+    const cooldown = checkSchoolSwitchCooldown(currentUser);
+    if (!cooldown.canSwitch) {
+      return {
+        success: false,
+        error: cooldown.reason || `School transfer is on a 30-day cooldown (${cooldown.formattedRemaining}).`,
+      };
+    }
+
+    const cleanSchoolName = sanitizeText(schoolName, 200);
+    const nowIso = new Date().toISOString();
+    const isCreator = currentUser.role === 'creator' || isCreatorEmail(currentUser.email);
+
+    const previousSchoolId = currentUser.schoolId;
+
+    const updatedUser: User = {
+      ...currentUser,
+      schoolId,
+      schoolName: cleanSchoolName,
+      lastSchoolSwitchedAt: isCreator ? undefined : nowIso,
+    };
+
+    setCurrentUser(updatedUser);
+    setActiveSchoolFilter(schoolId);
+
+    try {
+      await updateDoc(doc(db, 'users', currentUser.id), {
+        schoolId,
+        schoolName: cleanSchoolName,
+        ...(isCreator ? {} : { lastSchoolSwitchedAt: nowIso }),
+      });
+    } catch (err) {
+      console.warn('Could not update user school switch in firestore:', err);
+    }
+
+    // Update school member counts dynamically
+    setSchools((prev) =>
+      prev.map((s) => {
+        if (s.id === schoolId) {
+          return { ...s, studentCount: (s.studentCount || 0) + 1 };
+        }
+        if (previousSchoolId && s.id === previousSchoolId) {
+          return { ...s, studentCount: Math.max(0, (s.studentCount || 1) - 1) };
+        }
+        return s;
+      })
+    );
+
+    return { success: true };
+  };
+
+  const schoolSwitchCooldown = checkSchoolSwitchCooldown(currentUser);
 
   // PROFILE ACTIONS
   const updateProfile = async (updates: Partial<User>): Promise<{ success: boolean; error?: string }> => {
@@ -494,6 +655,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (updates.isAnonymous !== undefined) {
       sanitizedUpdates.isAnonymous = Boolean(updates.isAnonymous);
+      try {
+        localStorage.setItem('school_anonymous_compelled_' + currentUser.id, sanitizedUpdates.isAnonymous ? 'true' : 'false');
+      } catch {
+        // ignore
+      }
     }
 
     if (updates.anonymousNickname !== undefined) {
@@ -547,16 +713,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!currentUser) return { success: false, error: 'User not logged in' };
     const nextState = !currentUser.isAnonymous;
 
-    // If turning on Compelled mode, verify they already have a unique nickname
-    if (nextState && !currentUser.anonymousNickname) {
-      setIsProfileModalOpen(true);
-      return { 
-        success: false, 
-        error: 'Please configure a unique Compelled nickname first to turn Compelled on.' 
-      };
+    // Immediately persist to local storage so it stays intact across reloads or leaves
+    try {
+      localStorage.setItem('school_anonymous_compelled_' + currentUser.id, nextState ? 'true' : 'false');
+    } catch {
+      // ignore
     }
 
-    return await updateProfile({ isAnonymous: nextState });
+    // Auto-generate or reuse unique nickname if turning on Compelled
+    let cleanNick = currentUser.anonymousNickname?.trim();
+    if (nextState && !cleanNick) {
+      const sanitizedName = currentUser.name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10);
+      cleanNick = `Scholar_${sanitizedName || currentUser.id.slice(0, 6)}`;
+    }
+
+    return await updateProfile({ 
+      isAnonymous: nextState,
+      ...(cleanNick ? { anonymousNickname: cleanNick } : {})
+    });
   };
 
   // POST ACTIONS WITH PAYLOAD VALIDATION & XSS SANITIZATION
@@ -600,13 +774,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ? `@${currentUser.anonymousNickname || 'Compelled'}`
       : currentUser.name;
 
+    // Scope post to active school or user's assigned school
+    let targetSchoolId = currentUser.schoolId || 'unassigned';
+    let targetSchoolName = currentUser.schoolName || 'Independent Scholar';
+
+    if (activeSchoolFilter && activeSchoolFilter !== 'all') {
+      const activeSch = approvedSchools.find((s) => s.id === activeSchoolFilter);
+      if (activeSch) {
+        targetSchoolId = activeSch.id;
+        targetSchoolName = activeSch.name;
+      }
+    } else if (currentUser.schoolId && currentUser.schoolId !== 'unassigned') {
+      targetSchoolId = currentUser.schoolId;
+      targetSchoolName = currentUser.schoolName;
+    } else if (approvedSchools.length > 0) {
+      targetSchoolId = approvedSchools[0].id;
+      targetSchoolName = approvedSchools[0].name;
+    }
+
     const newPostData: Omit<Post, 'id'> = {
       userId: currentUser.id,
       authorName: authorDisplayName,
       authorAvatarBase64: isAnonymous ? ANONYMOUS_AVATAR_BASE64 : currentUser.avatarBase64,
       isAnonymous,
-      schoolId: currentUser.schoolId || 'unassigned',
-      schoolName: currentUser.schoolName || 'Independent Scholar',
+      schoolId: targetSchoolId,
+      schoolName: targetSchoolName,
       ...(isAnonymous
         ? {}
         : {
@@ -626,11 +818,72 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const docRef = await addDoc(collection(db, 'posts'), newPostData);
       const postWithId: Post = { id: docRef.id, ...newPostData };
       setPosts((prev) => [postWithId, ...prev]);
+
+      // Increment school post count
+      if (targetSchoolId && targetSchoolId !== 'unassigned') {
+        try {
+          await updateDoc(doc(db, 'schools', targetSchoolId), {
+            postCount: increment(1),
+          });
+        } catch {
+          // ignore
+        }
+      }
       return { success: true };
-    } catch {
-      // Local fallback
+    } catch (err: any) {
+      console.error('Failed to create post in Firestore:', err);
       const localPost: Post = { id: `post-${Date.now()}`, ...newPostData };
       setPosts((prev) => [localPost, ...prev]);
+      return { success: true };
+    }
+  };
+
+  // POST DELETION (Website Creator can delete any post; Authors can delete their own)
+  const deletePost = async (postId: string): Promise<{ success: boolean; error?: string }> => {
+    if (!currentUser) {
+      return { success: false, error: 'You must be signed in to delete a post.' };
+    }
+
+    const postToDelete = posts.find((p) => p.id === postId);
+    if (!postToDelete) {
+      return { success: false, error: 'Post not found.' };
+    }
+
+    const isCreator = currentUser.role === 'creator' || isCreatorEmail(currentUser.email);
+    const isAuthor = currentUser.id === postToDelete.userId;
+
+    if (!isCreator && !isAuthor) {
+      return { success: false, error: 'Unauthorized: Only the author or Website Creator can delete this post.' };
+    }
+
+    try {
+      await deleteDoc(doc(db, 'posts', postId));
+
+      // Optimistically update posts state
+      setPosts((prev) => prev.filter((p) => p.id !== postId));
+      if (selectedPost?.id === postId) {
+        setSelectedPost(null);
+      }
+
+      // Decrement school postCount
+      if (postToDelete.schoolId && postToDelete.schoolId !== 'unassigned') {
+        try {
+          await updateDoc(doc(db, 'schools', postToDelete.schoolId), {
+            postCount: increment(-1),
+          });
+        } catch {
+          // ignore
+        }
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('Error deleting post from Firestore:', err);
+      // Optimistically remove locally as fallback
+      setPosts((prev) => prev.filter((p) => p.id !== postId));
+      if (selectedPost?.id === postId) {
+        setSelectedPost(null);
+      }
       return { success: true };
     }
   };
@@ -784,6 +1037,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const deleteSchool = async (schoolId: string): Promise<{ success: boolean; error?: string }> => {
+    const isCreator = currentUser?.role === 'creator' || isCreatorEmail(currentUser?.email);
+    if (!isCreator) {
+      return { success: false, error: 'Unauthorized: Only the Website Creator can delete a school.' };
+    }
+
+    try {
+      await deleteDoc(doc(db, 'schools', schoolId));
+      setSchools((prev) => prev.filter((s) => s.id !== schoolId));
+      return { success: true };
+    } catch (err: any) {
+      console.error('Error deleting school from Firestore:', err);
+      setSchools((prev) => prev.filter((s) => s.id !== schoolId));
+      return { success: true };
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -807,16 +1077,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         logout,
         checkNicknameAvailability,
         selectUserSchool,
+        switchSchool,
+        schoolSwitchCooldown,
         updateProfile,
         toggleAnonymity,
         createPost,
         reactToPost,
         addComment,
+        deletePost,
         approveSchool,
         declineSchool,
+        deleteSchool,
         submitNewSchool,
         pendingSchoolCount,
         approvedSchools,
+        getSchoolMemberCount,
+        schoolMemberCounts,
       }}
     >
       {children}
