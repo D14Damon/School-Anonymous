@@ -3,6 +3,7 @@ import { Post } from '../types';
 import { useApp } from '../context/AppContext';
 import { formatPhilippineDateTime } from '../utils/dateUtils';
 import { isCreatorEmail } from '../utils/security';
+import { RichPostText } from './RichPostText';
 import { 
   MessageSquare, 
   EyeOff, 
@@ -168,9 +169,10 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
             </span>
           </div>
 
-          <p className="font-serif italic text-sm sm:text-base text-slate-200 leading-relaxed line-clamp-6 my-auto">
-            “{post.caption}”
-          </p>
+          <RichPostText
+            text={post.caption}
+            className="font-serif italic text-sm sm:text-base text-slate-200 leading-relaxed line-clamp-6 my-auto"
+          />
 
           <div className="text-[10px] text-slate-500 font-mono text-right mt-2">
             {pht.relative}
@@ -181,9 +183,10 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
       {/* Caption & Content (Shown under image if image exists) */}
       <div className="p-3.5 sm:p-4 space-y-3 flex-1 flex flex-col justify-between">
         {post.imageBase64 && post.caption ? (
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed line-clamp-3">
-            {post.caption}
-          </p>
+          <RichPostText
+            text={post.caption}
+            className="text-xs sm:text-sm text-slate-300 leading-relaxed line-clamp-3"
+          />
         ) : null}
 
         {/* Facebook-style reaction bar */}

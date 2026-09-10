@@ -146,7 +146,7 @@ export const CreatePostModal: React.FC = () => {
               rows={4}
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
-              placeholder="Inscribe your confession, rant, question, or thought..."
+              placeholder="Write your post... Use # Heading at a line start or **bold** words."
               className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-[#131622] border border-[#2b3144] text-slate-100 placeholder-slate-500 focus:outline-none focus:border-red-600 resize-none leading-relaxed"
             />
           </div>

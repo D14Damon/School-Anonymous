@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatPhilippineDateTime } from '../utils/dateUtils';
 import { isCreatorEmail } from '../utils/security';
+import { RichPostText } from './RichPostText';
 import { 
   X, 
   Send, 
@@ -193,15 +194,17 @@ export const PostDetailModal: React.FC = () => {
                     {selectedPost.tag}
                   </span>
                 </div>
-                <p className="font-serif italic text-base sm:text-lg text-slate-100 leading-relaxed">
-                  “{selectedPost.caption}”
-                </p>
+                <RichPostText
+                  text={selectedPost.caption}
+                  className="font-serif italic text-base sm:text-lg text-slate-100 leading-relaxed"
+                />
               </div>
             ) : (
               selectedPost.caption && (
-                <p className="text-xs sm:text-sm text-slate-200 leading-relaxed pt-1">
-                  {selectedPost.caption}
-                </p>
+                <RichPostText
+                  text={selectedPost.caption}
+                  className="text-xs sm:text-sm text-slate-200 leading-relaxed pt-1"
+                />
               )
             )}
 
