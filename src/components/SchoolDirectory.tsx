@@ -29,6 +29,7 @@ export const SchoolDirectory: React.FC = () => {
     switchSchool,
     schoolSwitchCooldown,
     getSchoolMemberCount,
+    getSchoolPostCount,
   } = useApp();
 
   const [search, setSearch] = useState('');
@@ -393,7 +394,7 @@ export const SchoolDirectory: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-1.5 text-slate-400">
                       <ImageIcon className="w-3.5 h-3.5 text-red-500" />
-                      <span>{school.postCount} Posts</span>
+                      <span>{getSchoolPostCount(school.id)} Posts</span>
                     </div>
                   </div>
                 </div>

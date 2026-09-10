@@ -33,6 +33,7 @@ export const Header: React.FC = () => {
     logout,
     schoolSwitchCooldown,
     getSchoolMemberCount,
+    getSchoolPostCount,
   } = useApp();
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -113,7 +114,7 @@ export const Header: React.FC = () => {
                       >
                         <span className="truncate pr-2">{sch.name}</span>
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/40 text-slate-400 font-mono">
-                          {sch.postCount}
+                          {getSchoolPostCount(sch.id)}
                         </span>
                       </button>
                     ))}

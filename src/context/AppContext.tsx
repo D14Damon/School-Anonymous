@@ -98,6 +98,7 @@ interface AppContextType {
   pendingSchoolCount: number;
   approvedSchools: School[];
   getSchoolMemberCount: (schoolId?: string) => number;
+  getSchoolPostCount: (schoolId?: string) => number;
   schoolMemberCounts: Record<string, number>;
 }
 
@@ -355,6 +356,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const sch = schools.find((s) => s.id === schoolId);
     const staticCount = sch?.studentCount || 0;
     return hasLoadedSchoolMemberCounts ? realtime : Math.max(staticCount, 0);
+  };
+
+  const getSchoolPostCount = (schoolId?: string): number => {
+    if (!schoolId) return 0;
+    return posts.filter((post) => post.schoolId === schoolId).length;
   };
 
   const pendingSchoolCount = schools.filter((s) => s.status === 'pending').length;
@@ -1165,6 +1171,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         pendingSchoolCount,
         approvedSchools,
         getSchoolMemberCount,
+        getSchoolPostCount,
         schoolMemberCounts,
       }}
     >

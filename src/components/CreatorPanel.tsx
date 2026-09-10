@@ -25,6 +25,7 @@ export const CreatorPanel: React.FC = () => {
     setActiveSchoolFilter,
     posts,
     boostPostReaction,
+    getSchoolPostCount,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'declined'>('pending');
@@ -509,7 +510,7 @@ export const CreatorPanel: React.FC = () => {
                       {school.name}
                     </h4>
                     <span className="text-[10px] text-slate-400">
-                      {school.postCount} posts
+                      {getSchoolPostCount(school.id)} posts
                     </span>
                   </div>
                   {(school.city || school.country) && (
