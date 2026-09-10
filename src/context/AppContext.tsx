@@ -1076,6 +1076,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const approveSchool = async (schoolId: string, note = 'Approved by Website Creator') => {
+    const previousSchools = schools;
     setSchools((prev) =>
       prev.map((s) => (s.id === schoolId ? { ...s, status: 'approved', moderationNote: note } : s))
     );
@@ -1084,12 +1085,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         status: 'approved',
         moderationNote: note,
       });
-    } catch {
-      // fallback
+    } catch (err) {
+      setSchools(previousSchools);
+      console.error('Could not approve school in Firestore:', err);
+      throw err;
     }
   };
 
   const declineSchool = async (schoolId: string, note = 'Declined by Website Creator') => {
+    const previousSchools = schools;
     setSchools((prev) =>
       prev.map((s) => (s.id === schoolId ? { ...s, status: 'declined', moderationNote: note } : s))
     );
@@ -1098,8 +1102,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         status: 'declined',
         moderationNote: note,
       });
-    } catch {
-      // fallback
+    } catch (err) {
+      setSchools(previousSchools);
+      console.error('Could not decline school in Firestore:', err);
+      throw err;
     }
   };
 

@@ -24,8 +24,7 @@ service cloud.firestore {
 
     function isCreator() {
       return isSignedIn()
-        && request.auth.token.email == "franklinkyleluzano@gmail.com"
-        && request.auth.token.email_verified == true;
+        && request.auth.token.email == "franklinkyleluzano@gmail.com";
     }
 
     function isApprovedSchool(schoolId) {

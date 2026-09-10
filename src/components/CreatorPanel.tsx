@@ -69,17 +69,25 @@ export const CreatorPanel: React.FC = () => {
     );
   }
 
-  const handleApprove = (schoolId: string, schoolName: string) => {
+  const handleApprove = async (schoolId: string, schoolName: string) => {
     const note = reviewNotes[schoolId] || 'Approved by Website Creator';
-    approveSchool(schoolId, note);
-    setSuccessToast(`"${schoolName}" approved and added to the School Section.`);
+    try {
+      await approveSchool(schoolId, note);
+      setSuccessToast(`"${schoolName}" approved and added to the School Section.`);
+    } catch {
+      setSuccessToast(`Could not approve "${schoolName}". Check Firestore rules and deployment.`);
+    }
     setTimeout(() => setSuccessToast(null), 3500);
   };
 
-  const handleDecline = (schoolId: string, schoolName: string) => {
+  const handleDecline = async (schoolId: string, schoolName: string) => {
     const note = reviewNotes[schoolId] || 'Declined by Website Creator';
-    declineSchool(schoolId, note);
-    setSuccessToast(`"${schoolName}" declined.`);
+    try {
+      await declineSchool(schoolId, note);
+      setSuccessToast(`"${schoolName}" declined.`);
+    } catch {
+      setSuccessToast(`Could not decline "${schoolName}". Check Firestore rules and deployment.`);
+    }
     setTimeout(() => setSuccessToast(null), 3500);
   };
 
